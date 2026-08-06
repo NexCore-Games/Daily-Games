@@ -4,7 +4,9 @@ on:
   schedule:
     # Runs every day at 03:00 UTC (~8:30 AM IST)
     - cron: "0 3 * * *"
-  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
+
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,6 +14,7 @@ permissions:
 jobs:
   generate-and-commit:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -23,14 +26,16 @@ jobs:
 
       - name: Generate today's game
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node scripts/generate-game.js
 
       - name: Commit and push new game
         run: |
           git config user.name "nexcore-game-bot"
           git config user.email "bot@nexcoregames.local"
+
           git add games/ index.html
+
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
