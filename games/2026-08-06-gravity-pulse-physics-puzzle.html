@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Gravity Pulse - Physics Puzzle</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #09070f;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 100vh;
+      overflow: hidden;
+      padding: 10px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+      margin-bottom: 8px;
+    }
+
+    .title-box h1 {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      background: linear-gradient(45deg, #00f3ff, #ff0055);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .title-box p {
+      font-size: 0.75rem;
+      color: #a099c0;
+    }
+
+    .stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-value {
+      color: #00f3ff;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      background: radial-gradient(circle at center, #161228 0%, #07050d 100%);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 243, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      max-width: 100%;
+      max-height: 100%;
+      touch-action: none;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(9, 7, 15, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border-radius: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+    }
+
+    .overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 24px;
+      border-radius: 20px;
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+
+    .card h2 {
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      color: #b3a9d6;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #00f3ff, #0066ff);
+      border: none;
+      color: #fff;
+      font-weight: 700;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      outline: none;
+      box-shadow: 0 4px 15px rgba(0, 243, 255, 0.3);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 243, 255, 0.5);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    footer {
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: #635d82;
+      letter-spacing: 0.5px;
+    }
+
+    footer span {
+      color: #00f3ff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-box">
+      <h1>GRAVITY PULSE</h1>
+      <p>Drag ball to aim & launch • Tap nodes to switch Pull/Push</p>
+    </div>
+    <div class="stats">
+      <div class="stat-item">LVL: <span id="lvl-val" class="stat-value">1</span></div>
+      <div class="stat-item">SCORE: <span id="score-val" class="stat-value">0</span></div>
+    </div>
+  </header>
+
+  <div id="game-container">
+    <canvas id="canvas" width="800" height="500"></canvas>
+    
+    <div id="overlay" class="overlay">
+      <div class="card">
+        <h2 id="modal-title">LEVEL CLEAR!</h2>
+        <p id="modal-desc">Orb reached destination smoothly.</p>
+        <button id="modal-btn" class="btn">NEXT LEVEL</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Crafted by <span>NexCore Games</span></footer>
+
+  <script>
+    // Audio Synthesizer for dependency-free sound effects
+    const Audio = {
+      ctx: null,
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      },
+      play(type) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        if (type === 'launch') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(450, now + 0.15);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === 'toggle') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.setValueAtTime(600, now + 0.05);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === 'star') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.08);
+          osc.frequency.setValueAtTime(783.99, now + 0.16);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'win') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+          osc.start(now);
+          osc.stop(now + 0.4);
+        } else if (type === 'fail') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        }
+      }
+    };
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDesc = document.getElementById('modal-desc');
+    const modalBtn = document.getElementById('modal-btn');
+    const lvlVal = document.getElementById('lvl-val');
+    const scoreVal = document.getElementById('score-val');
+
+    // Game Constants & State
+    const WIDTH = 800;
+    const HEIGHT = 500;
+    
+    let currentLevel = 0;
+    let totalScore = 0;
+    let gameState = 'AIMING'; // AIMING, FLIGHT, WIN, FAIL
+    
+    let ball = {
+      x: 100, y: 250,
+      vx: 0, vy: 0,
+      radius: 9,
+      startPos: { x: 100, y: 250 },
+      trail: []
+    };
+
+    let drag = {
+      isDragging: false,
+      startX: 0, startY: 0,
+      currX: 0, currY: 0
+    };
+
+    let goal = { x: 700, y: 250, radius: 22, pulse: 0 };
+    let nodes = [];
+    let stars = [];
+    let hazards = [];
+    let particles = [];
+
+    // Level Designs
+    const levels = [
+      // Level 1: Intro to Sling & Attract
+      {
+        start: { x: 100, y: 250 },
+        goal: { x: 700, y: 250 },
+        nodes: [{ x: 400, y: 150, type: 1, mass: 9000, radius: 22 }], // Attractor
+        stars: [{ x: 400, y: 250, taken: false }],
+        hazards: []
+      },
+      // Level 2: Slalom around repeller
+      {
+        start: { x: 100, y: 150 },
+        goal: { x: 700, y: 350 },
+        nodes: [{ x: 400, y: 250, type: -1, mass: 10000, radius: 22 }], // Repeller
+        stars: [{ x: 400, y: 120, taken: false }, { x: 400, y: 380, taken: false }],
+        hazards: []
+      },
+      // Level 3: Dual Field Switch
+      {
+        start: { x: 100, y: 250 },
+        goal: { x: 700, y: 250 },
+        nodes: [
+          { x: 300, y: 150, type: 1, mass: 8500, radius: 22 },
+          { x: 500, y: 350, type: -1, mass: 8500, radius: 22 }
+        ],
+        stars: [{ x: 300, y: 280, taken: false }, { x: 500, y: 220, taken: false }],
+        hazards: [{ x: 400, y: 250, radius: 20 }]
+      },
+      // Level 4: Black Hole Maze
+      {
+        start: { x: 80, y: 400 },
+        goal: { x: 720, y: 100 },
+        nodes: [
+          { x: 250, y: 300, type: 1, mass: 9500, radius: 22 },
+          { x: 550, y: 200, type: 1, mass: 9500, radius: 22 }
+        ],
+        stars: [{ x: 250, y: 150, taken: false }, { x: 550, y: 350, taken: false }, { x: 400, y: 250, taken: false }],
+        hazards: [{ x: 400, y: 250, radius: 28 }]
+      },
+      // Level 5: Precision Orbit
+      {
+        start: { x: 100, y: 250 },
+        goal: { x: 700, y: 250 },
+        nodes: [
+          { x: 400, y: 100, type: 1, mass: 12000, radius: 24 },
+          { x: 400, y: 400, type: 1, mass: 12000, radius: 24 }
+        ],
+        stars: [{ x: 400, y: 250, taken: false }],
+        hazards: [{ x: 400, y: 180, radius: 16 }, { x: 400, y: 320, radius: 16 }]
+      }
+    ];
+
+    function loadLevel(idx) {
+      const l = levels[idx % levels.length];
+      ball.startPos = { ...l.start };
+      ball.x = l.start.x;
+      ball.y = l.start.y;
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.trail = [];
+      
+      goal.x = l.goal.x;
+      goal.y = l.goal.y;
+
+      nodes = l.nodes.map(n => ({ ...n }));
+      stars = l.stars.map(s => ({ ...s, taken: false }));
+      hazards = l.hazards.map(h => ({ ...h }));
+      particles = [];
+
+      gameState = 'AIMING';
+      lvlVal.textContent = idx + 1;
+      overlay.classList.remove('active');
+    }
+
+    // Input Handling
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const scaleX = WIDTH / rect.width;
+      const scaleY = HEIGHT / rect.height;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    function handleStart(e) {
+      Audio.init();
+      const p = getCanvasCoords(e);
+
+      // Check node click for toggling gravity polarity
+      for (let n of nodes) {
+        const d = Math.hypot(n.x - p.x, n.y - p.y);
+        if (d < n.radius + 15) {
+          n.type *= -1;
+          Audio.play('toggle');
+          createBurst(n.x, n.y, n.type > 0 ? '#00f3ff' : '#ff0055', 12);
+          return;
+        }
+      }
+
+      // Ball slingshot initiation
+      if (gameState === 'AIMING') {
+        const d = Math.hypot(ball.x - p.x, ball.y - p.y);
+        if (d < 40) {
+          drag.isDragging = true;
+          drag.startX = ball.x;
+          drag.startY = ball.y;
+          drag.currX = p.x;
+          drag.currY = p.y;
+        }
+      }
+    }
+
+    function handleMove(e) {
+      if (drag.isDragging) {
+        const p = getCanvasCoords(e);
+        drag.currX = p.x;
+        drag.currY = p.y;
+      }
+    }
+
+    function handleEnd() {
+      if (drag.isDragging && gameState === 'AIMING') {
+        drag.isDragging = false;
+        const dx = drag.startX - drag.currX;
+        const dy = drag.startY - drag.currY;
+        const power = 0.08;
+        
+        ball.vx = dx * power;
+        ball.vy = dy * power;
+
+        if (Math.hypot(ball.vx, ball.vy) > 0.5) {
+          gameState = 'FLIGHT';
+          Audio.play('launch');
+        }
+      }
+    }
+
+    window.addEventListener('mousedown', handleStart);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchstart', handleStart, { passive: false });
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyR') {
+        loadLevel(currentLevel);
+      }
+    });
+
+    modalBtn.addEventListener('click', () => {
+      if (gameState === 'WIN') {
+        currentLevel++;
+        if (currentLevel >= levels.length) {
+          currentLevel = 0; // Loop or victory restart
+        }
+        loadLevel(currentLevel);
+      } else if (gameState === 'FAIL') {
+        loadLevel(currentLevel);
+      }
+    });
+
+    // Particle Visuals
+    function createBurst(x, y, color, count = 15) {
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 1;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color,
+          radius: Math.random() * 3 + 1
+        });
+      }
+    }
+
+    // Physics Update Logic
+    function updatePhysics() {
+      if (gameState !== 'FLIGHT') return;
+
+      // Trajectory / Movement
+      let fx = 0, fy = 0;
+
+      for (let n of nodes) {
+        const dx = n.x - ball.x;
+        const dy = n.y - ball.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+
+        if (dist > 10 && dist < 300) {
+          const force = (n.mass * n.type) / Math.max(distSq, 400);
+          fx += (dx / dist) * force;
+          fy += (dy / dist) * force;
+        }
+      }
+
+      ball.vx += fx * 0.016;
+      ball.vy += fy * 0.016;
+
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Trail
+      ball.trail.push({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 25) ball.trail.shift();
+
+      // Check Boundary Collisions / Out of Bounds
+      if (ball.x < -30 || ball.x > WIDTH + 30 || ball.y < -30 || ball.y > HEIGHT + 30) {
+        triggerFail("Orb escaped into deep space!");
+        return;
+      }
+
+      // Check Star Collections
+      stars.forEach(s => {
+        if (!s.taken) {
+          const d = Math.hypot(s.x - ball.x, s.y - ball.y);
+          if (d < ball.radius + 12) {
+            s.taken = true;
+            totalScore += 100;
+            scoreVal.textContent = totalScore;
+            Audio.play('star');
+            createBurst(s.x, s.y, '#ffd700', 12);
+          }
+        }
+      });
+
+      // Check Hazard Collisions
+      hazards.forEach(h => {
+        const d = Math.hypot(h.x - ball.x, h.y - ball.y);
+        if (d < ball.radius + h.radius) {
+          createBurst(ball.x, ball.y, '#ff0055', 25);
+          triggerFail("Destroyed by Singularity hazard!");
+        }
+      });
+
+      // Check Goal Collision
+      const goalDist = Math.hypot(goal.x - ball.x, goal.y - ball.y);
+      if (goalDist < ball.radius + goal.radius) {
+        totalScore += 250;
+        scoreVal.textContent = totalScore;
+        createBurst(goal.x, goal.y, '#00f3ff', 30);
+        triggerWin();
+      }
+    }
+
+    function triggerWin() {
+      gameState = 'WIN';
+      Audio.play('win');
+      modalTitle.textContent = "LEVEL CLEAR!";
+      modalTitle.style.color = "#00f3ff";
+      modalDesc.textContent = "Orb reached the target singularity!";
+      modalBtn.textContent = "NEXT LEVEL";
+      overlay.classList.add('active');
+    }
+
+    function triggerFail(reason) {
+      gameState = 'FAIL';
+      Audio.play('fail');
+      modalTitle.textContent = "MISSION FAILED";
+      modalTitle.style.color = "#ff0055";
+      modalDesc.textContent = reason;
