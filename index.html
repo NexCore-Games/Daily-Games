@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NexCore Games — Daily Game Catalog</title>
+<style>
+  :root { --bg:#0f1117; --card:#171a23; --accent:#7c5cff; --text:#f2f2f7; --muted:#9a9aa8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 48px 24px 24px; text-align:center; }
+  header h1 { margin:0 0 8px; font-size: 2.2rem; background: linear-gradient(90deg,#7c5cff,#ff5ca8); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header p { color: var(--muted); margin:0; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:16px; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .card { background: var(--card); border-radius: 14px; padding: 20px; text-decoration:none; color: var(--text); border: 1px solid #262a38; transition: transform .15s ease, border-color .15s ease; }
+  .card:hover { transform: translateY(-4px); border-color: var(--accent); }
+  .card-title { font-weight:600; font-size:1.05rem; margin-bottom:6px; }
+  .card-meta { color: var(--muted); font-size:0.85rem; }
+  footer { text-align:center; padding: 40px; color: var(--muted); font-size:0.85rem; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>NexCore Games</h1>
+    <p>A new browser game, generated and shipped every day. 1 games and counting.</p>
+  </header>
+  <div class="grid">
+      <a class="card" href="games/2026-08-06-momentum-core-physics-puzzle-game.html" target="_blank" rel="noopener">
+        <div class="card-title">Momentum Core - Physics Puzzle Game</div>
+        <div class="card-meta">2026-08-06 · a physics-based puzzle game with gravity or momentum</div>
+      </a>
+  </div>
+  <footer>Built by NexCore Games · Automated daily via Gemini API + GitHub Actions</footer>
+</body>
+</html>

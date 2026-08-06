@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Momentum Core - Physics Puzzle Game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #090a15;
+    color: #e0e6ed;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    overflow: hidden;
+    padding: 10px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #00f2fe, #4facfe, #00c6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(0, 242, 254, 0.3);
+  }
+  p.subtitle {
+    font-size: 0.82rem;
+    color: #8a99ad;
+    margin-top: 2px;
+  }
+  #game-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 4/3;
+    background: #0f1123;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6), inset 0 0 2px rgba(255,255,255,0.1);
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+  .hud {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .hud-badge {
+    background: rgba(15, 17, 35, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .hud-badge span {
+    color: #00f2fe;
+    font-weight: 700;
+  }
+  .hud-btn {
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .hud-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(9, 10, 21, 0.85);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    padding: 20px;
+    text-align: center;
+  }
+  .overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .overlay h2 {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #fff, #a1c4fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .overlay p {
+    color: #a0aec0;
+    margin-bottom: 20px;
+    max-width: 360px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    color: #090a15;
+    border: none;
+    padding: 12px 32px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 242, 254, 0.4);
+    transition: all 0.2s ease;
+  }
+  .btn-primary:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 24px rgba(0, 242, 254, 0.6);
+  }
+  footer {
+    font-size: 0.75rem;
+    color: #5a6578;
+    margin-top: 6px;
+  }
+  footer span { color: #ff4757; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Momentum Core</h1>
+  <p class="subtitle">Drag & release to launch. Harness gravity wells to reach the portal!</p>
+</header>
+
+<div id="game-container">
+  <div class="hud">
+    <div class="hud-badge">LEVEL: <span id="hud-level">1</span></div>
+    <div class="hud-badge">SLINGS: <span id="hud-slings">3</span></div>
+    <div class="hud-badge">SCORE: <span id="hud-score">0</span></div>
+    <button class="hud-btn" id="btn-reset">Reset</button>
+  </div>
+
+  <canvas id="canvas" width="800" height="600"></canvas>
+
+  <div class="overlay" id="overlay">
+    <h2 id="overlay-title">CORE STABILIZED</h2>
+    <p id="overlay-desc">You successfully routed the momentum core into the portal network.</p>
+    <button class="btn-primary" id="overlay-btn">NEXT LEVEL</button>
+  </div>
+</div>
+
+<footer>
+  Crafted with <span>♥</span> by NexCore Games
+</footer>
+
+<script>
+// --- AUDIO SYNTHESIZER ---
+const Audio = {
+  ctx: null,
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+  },
+  play(type) {
+    if (!this.ctx) return;
+    try {
+      const ctx = this.ctx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+
+      if (type === 'launch') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'crystal') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.08);
+        osc.frequency.setValueAtTime(783.99, now + 0.16);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'bounce') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.12);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'fail') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'win') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(554.37, now + 0.1);
+        osc.frequency.setValueAtTime(659.25, now + 0.2);
+        osc.frequency.setValueAtTime(880, now + 0.3);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      }
+    } catch(e){}
+  }
+};
+
+// --- GAME CONFIG & LEVELS ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const HUD_LEVEL = document.getElementById('hud-level');
+const HUD_SLINGS = document.getElementById('hud-slings');
+const HUD_SCORE = document.getElementById('hud-score');
+const BTN_RESET = document.getElementById('btn-reset');
+const OVERLAY = document.getElementById('overlay');
+const OVERLAY_TITLE = document.getElementById('overlay-title');
+const OVERLAY_DESC = document.getElementById('overlay-desc');
+const OVERLAY_BTN = document.getElementById('overlay-btn');
+
+let levelIndex = 0;
+let totalScore = 0;
+let gameState = 'AIMING'; // AIMING, MOVING, WON, LOST, GAMEOVER
+let slingsLeft = 3;
+
+// Game Objects
+let orb = { x: 100, y: 300, vx: 0, vy: 0, radius: 12, trail: [] };
+let dragStart = null;
+let dragCurrent = null;
+let particles = [];
+
+const LEVELS = [
+  // L1: Intro
+  {
+    slings: 3,
+    start: { x: 100, y: 300 },
+    portal: { x: 700, y: 300, radius: 24 },
+    wells: [{ x: 400, y: 300, radius: 20, strength: 1.8, range: 180, type: 'attract' }],
+    hazards: [],
+    crystals: [{ x: 400, y: 180, active: true }, { x: 400, y: 420, active: true }],
+    bumpers: []
+  },
+  // L2: Repulsor Slingshot
+  {
+    slings: 3,
+    start: { x: 100, y: 150 },
+    portal: { x: 700, y: 500, radius: 24 },
+    wells: [
+      { x: 300, y: 250, radius: 22, strength: 2.2, range: 190, type: 'repel' },
+      { x: 550, y: 350, radius: 20, strength: 1.6, range: 160, type: 'attract' }
+    ],
+    hazards: [{ x: 300, y: 450, radius: 18 }],
+    crystals: [{ x: 300, y: 100, active: true }, { x: 550, y: 200, active: true }],
+    bumpers: []
+  },
+  // L3: Bumper & Precision
+  {
+    slings: 3,
+    start: { x: 100, y: 500 },
+    portal: { x: 700, y: 100, radius: 24 },
+    wells: [{ x: 450, y: 300, radius: 25, strength: 2.5, range: 220, type: 'attract' }],
+    hazards: [{ x: 450, y: 180, radius: 18 }, { x: 450, y: 420, radius: 18 }],
+    crystals: [{ x: 250, y: 300, active: true }, { x: 650, y: 300, active: true }],
+    bumpers: [{ x1: 200, y1: 150, x2: 320, y2: 250 }]
+  },
+  // L4: Dynamic Moving Gravity Field
+  {
+    slings: 4,
+    start: { x: 80, y: 300 },
+    portal: { x: 720, y: 300, radius: 24 },
+    wells: [
+      { x: 400, y: 200, radius: 20, strength: 2.0, range: 170, type: 'attract', moveY: { min: 120, max: 480, speed: 2 } },
+      { x: 400, y: 400, radius: 20, strength: 2.0, range: 170, type: 'repel', moveY: { min: 120, max: 480, speed: -2 } }
+    ],
+    hazards: [{ x: 250, y: 300, radius: 20 }, { x: 550, y: 300, radius: 20 }],
+    crystals: [{ x: 400, y: 80, active: true }, { x: 400, y: 520, active: true }],
+    bumpers: []
+  },
+  // L5: The Slalom Master
+  {
+    slings: 4,
+    start: { x: 100, y: 100 },
+    portal: { x: 700, y: 500, radius: 24 },
+    wells: [
+      { x: 250, y: 250, radius: 22, strength: 2.2, range: 180, type: 'attract' },
+      { x: 450, y: 350, radius: 22, strength: 2.2, range: 180, type: 'repel' },
+      { x: 600, y: 200, radius: 22, strength: 2.0, range: 160, type: 'attract' }
+    ],
+    hazards: [
+      { x: 250, y: 450, radius: 20 },
+      { x: 450, y: 150, radius: 20 }
+    ],
+    crystals: [
+      { x: 250, y: 120, active: true },
+      { x: 450, y: 500, active: true },
+      { x: 600, y: 350, active: true }
+    ],
+    bumpers: [{ x1: 650, y1: 50, x2: 750, y2: 180 }]
+  }
+];
+
+let currentLevel = null;
+
+function loadLevel(idx) {
+  if (idx >= LEVELS.length) {
+    showOverlay('VICTORY!', `You mastered all ${LEVELS.length} gravity zones with a total score of ${totalScore}!`, 'REPLAY ALL');
+    gameState = 'GAMEOVER';
+    return;
+  }
+  levelIndex = idx;
+  // Deep clone level data
+  currentLevel = JSON.parse(JSON.stringify(LEVELS[idx]));
+  slingsLeft = currentLevel.slings;
+  
+  orb.x = currentLevel.start.x;
+  orb.y = currentLevel.start.y;
+  orb.vx = 0;
+  orb.vy = 0;
+  orb.trail = [];
+  particles = [];
+  
+  gameState = 'AIMING';
+  updateHUD();
+  hideOverlay();
+}
+
+function updateHUD() {
+  HUD_LEVEL.textContent = `${levelIndex + 1}/${LEVELS.length}`;
+  HUD_SLINGS.textContent = slingsLeft;
+  HUD_SCORE.textContent = totalScore;
+}
+
+function showOverlay(title, desc, btnText) {
+  OVERLAY_TITLE.textContent = title;
+  OVERLAY_DESC.textContent = desc;
+  OVERLAY_BTN.textContent = btnText;
+  OVERLAY.classList.add('active');
+}
+
+function hideOverlay() {
+  OVERLAY.classList.remove('active');
+}
+
+// --- PHYSICS & LOGIC ---
+
+function updatePhysics() {
+  // Update Moving Gravity Wells
+  if (currentLevel) {
+    for (let w of currentLevel.wells) {
+      if (w.moveY) {
+        w.y += w.moveY.speed;
+        if (w.y < w.moveY.min || w.y > w.moveY.max) w.moveY.speed *= -1;
+      }
+    }
+  }
+
+  if (gameState !== 'MOVING') return;
+
+  const dt = 0.016; // fixed timestep
+  const steps = 4;
+  const subDt = dt / steps;
+
+  for (let s = 0; s < steps; s++) {
+    // Apply gravity well forces
+    for (let w of currentLevel.wells) {
+      let dx = w.x - orb.x;
+      let dy = w.y - orb.y;
+      let distSq = dx * dx + dy * dy;
+      let dist = Math.sqrt(distSq);
+
+      if (dist < w.range && dist > 5) {
+        let force = (w.strength * 450000) / (distSq + 1200);
+        if (w.type === 'repel') force = -force;
+        orb.vx += (dx / dist) * force * subDt;
+        orb.vy += (dy / dist) * force * subDt;
+      }
+
+      // Check center core collision (Black Hole / Absorber)
+      if (dist < w.radius) {
+        createExplosion(orb.x, orb.y, '#ff0055');
+        Audio.play('fail');
+        handleCoreLoss('Absorbed by gravity core!');
+        return;
+      }
+    }
+
+    // Move orb
+    orb.x += orb.vx * subDt;
+    orb.y += orb.vy * subDt;
+
+    // Boundary Bounce
+    const bounds = { left: orb.radius, right: 800 - orb.radius, top: orb.radius, bottom: 600 - orb.radius };
+    if (orb.x < bounds.left) { orb.x = bounds.left; orb.vx *= -0.75; Audio.play('bounce'); }
+    if (orb.x > bounds.right) { orb.x = bounds.right; orb.vx *= -0.75; Audio.play('bounce'); }
+    if (orb.y < bounds.top) { orb.y = bounds.top; orb.vy *= -0.75; Audio.play('bounce'); }
+    if (orb.y > bounds.bottom) { orb.y = bounds.bottom; orb.vy *= -0.75; Audio.play('bounce'); }
+
+    // Bumper collision
+    for (let b of currentLevel.bumpers) {
+      let res = lineCircleCollision(b.x1, b.y1, b.x2, b.y2, orb.x, orb.y, orb.radius);
+      if (res.hit) {
+        // Reflect velocity vector
+        let nx = res.nx, ny = res.ny;
+        let dot = orb.vx * nx + orb.vy * ny;
+        orb.vx = (orb.vx - 2 * dot * nx) * 1.15; // Bounce boost
+        orb.vy = (orb.vy - 2 * dot * ny) * 1.15;
+        orb.x += nx * (res.depth + 1);
+        orb.y += ny * (res.depth + 1);
+        Audio.play('bounce');
+        createSparkles(res.cx, res.cy, '#00f2fe');
+      }
+    }
+
+    // Hazard Collisions
+    for (let h of currentLevel.hazards) {
+      let dx = h.x - orb.x;
+      let dy = h.y - orb.y;
+      if (Math.hypot(dx, dy) < h.radius + orb.radius) {
+        createExplosion(orb.x, orb.y, '#ff3366');
+        Audio.play('fail');
+        handleCoreLoss('Destroyed by hazard mine!');
+        return;
+      }
+    }
+
+    // Crystal Pickups
+    for (let c of currentLevel.crystals) {
+      if (c.active) {
+        let dx = c.x - orb.x;
+        let dy = c.y - orb.y;
+        if (Math.hypot(dx, dy) < 18 + orb.radius) {
+          c.active = false;
+          totalScore += 250;
+          updateHUD();
+          Audio.play('crystal');
+          createSparkles(c.x, c.y, '#ffd700');
+        }
+      }
+    }
+
+    // Portal (Win Check)
+    let pdx = currentLevel.portal.x - orb.
