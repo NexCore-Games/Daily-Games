@@ -2,17 +2,17 @@
 /**
  * NexCore Games — Daily Game Generator
  * ------------------------------------
- * Calls the Anthropic API to generate one new, self-contained, playable
+ * Calls the Gemini API to generate one new, self-contained, playable
  * HTML5 canvas/JS game every time it runs. Designed to be triggered daily
  * by a GitHub Actions cron job (see .github/workflows/daily-game.yml).
  *
  * What it does each run:
  *  1. Picks a genre/theme (rotates so games don't repeat within a cycle).
- *  2. Asks Claude to generate a complete, single-file HTML game.
+ *  2. Asks Gemini to generate a complete, single-file HTML game.
  *  3. Saves it to /games/<date>-<slug>.html
  *  4. Regenerates /games/index.json and the gallery /index.html
  *
- * Requires: ANTHROPIC_API_KEY env var (set as a GitHub Actions secret).
+ * Requires: GEMINI_API_KEY env var (set as a GitHub Actions secret).
  */
 
 const fs = require("fs");
@@ -38,8 +38,6 @@ const THEMES = [
 ];
 
 function pickTheme() {
-  // Deterministic-ish rotation based on day-of-year so 12 themes cycle
-  // roughly monthly, but add slight randomness so repeats aren't exact.
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000
   );
@@ -55,10 +53,10 @@ function slugify(str) {
     .slice(0, 40);
 }
 
-async function callClaude(theme) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+async function callGemini(theme) {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing ANTHROPIC_API_KEY environment variable.");
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
   }
 
   const systemPrompt = `You are a senior HTML5 game developer working for NexCore Games, an Indian indie game studio. You write complete, single-file, dependency-free browser games (HTML+CSS+JS in one file, using <canvas> where relevant). Rules:
@@ -72,32 +70,45 @@ async function callClaude(theme) {
 
   const userPrompt = `Create a brand new original browser game: ${theme}. Give it a catchy 2-3 word name. Make sure it's genuinely fun and has a clear win/lose/score loop, not just a tech demo.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const model = "gemini-3.6-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      "x-goog-api-key": apiKey,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+      system_instruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: userPrompt }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 8000,
+      },
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+    throw new Error(`Gemini API error ${response.status}: ${errText}`);
   }
 
   const data = await response.json();
-  const textBlock = data.content.find((b) => b.type === "text");
-  if (!textBlock) throw new Error("No text content returned by the model.");
+  const candidate = data.candidates && data.candidates[0];
+  const part =
+    candidate && candidate.content && candidate.content.parts
+      ? candidate.content.parts.find((p) => p.text)
+      : null;
+  if (!part) throw new Error("No text content returned by the model.");
 
-  let html = textBlock.text.trim();
-  // Safety net: strip markdown fences if the model added them anyway.
+  let html = part.text.trim();
   html = html.replace(/^```html\s*/i, "").replace(/```$/i, "").trim();
 
   return html;
@@ -112,9 +123,9 @@ async function main() {
   const theme = pickTheme();
   console.log(`[nexcore-daily-game] Generating game for theme: ${theme}`);
 
-  const html = await callClaude(theme);
+  const html = await callGemini(theme);
 
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = new Date().toISOString().slice(0, 10);
   const roughTitle = extractTitle(html, theme.split(" ").slice(0, 3).join(" "));
   const slug = slugify(roughTitle) || slugify(theme);
   const filename = `${today}-${slug}.html`;
@@ -124,7 +135,6 @@ async function main() {
   fs.writeFileSync(filepath, html, "utf8");
   console.log(`[nexcore-daily-game] Wrote ${filepath}`);
 
-  // Update index.json (machine-readable catalog)
   let index = [];
   if (fs.existsSync(INDEX_JSON)) {
     try {
@@ -141,7 +151,6 @@ async function main() {
   });
   fs.writeFileSync(INDEX_JSON, JSON.stringify(index, null, 2), "utf8");
 
-  // Regenerate the gallery HTML
   regenerateGallery(index);
 
   console.log(`[nexcore-daily-game] Done. Total games in catalog: ${index.length}`);
@@ -186,7 +195,7 @@ function regenerateGallery(index) {
   <div class="grid">
 ${cards}
   </div>
-  <footer>Built by NexCore Games · Automated daily via Claude API + GitHub Actions</footer>
+  <footer>Built by NexCore Games · Automated daily via Gemini API + GitHub Actions</footer>
 </body>
 </html>
 `;
