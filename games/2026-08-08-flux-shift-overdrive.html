@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flux Shift: Overdrive</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            background-color: #080511;
+            color: #fff;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 6px;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #00f3ff, #ff007f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            text-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+        }
+
+        p.instructions {
+            font-size: 0.8rem;
+            color: #a0a5c0;
+            margin-top: 2px;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            aspect-ratio: 3 / 4;
+            max-height: 70vh;
+            background: #0d081d;
+            border-radius: 16px;
+            box-shadow: 0 0 30px rgba(120, 0, 255, 0.25), 0 0 0 2px rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 16px;
+            pointer-events: none;
+        }
+
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+        }
+
+        .stat-box {
+            background: rgba(15, 10, 30, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 6px 12px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            color: #8a8fb0;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #ffffff;
+            font-family: monospace;
+        }
+
+        .center-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            width: 85%;
+            background: rgba(13, 8, 29, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            border-radius: 20px;
+            padding: 24px 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 243, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #ff007f, #7928ca);
+            color: #fff;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: 800;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 0, 127, 0.4);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-top: 15px;
+            display: inline-block;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(255, 0, 127, 0.6);
+        }
+
+        .title-text {
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .subtitle-text {
+            font-size: 0.85rem;
+            color: #b3b8db;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
+            height: 90px;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 6px;
+            pointer-events: auto;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .mobile-controls {
+                display: grid;
+            }
+        }
+
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.2rem;
+            font-weight: bold;
+            backdrop-filter: blur(4px);
+        }
+
+        .touch-btn:active {
+            background: rgba(0, 243, 255, 0.25);
+            color: #fff;
+        }
+
+        .btn-left { grid-column: 1; grid-row: 1 / span 2; }
+        .btn-right { grid-column: 3; grid-row: 1 / span 2; }
+        .btn-jump { grid-column: 2; grid-row: 1; }
+        .btn-slide { grid-column: 2; grid-row: 2; }
+
+        footer {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: #63688e;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        footer span {
+            color: #00f3ff;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Flux Shift</h1>
+        <p class="instructions">Dodge obstacles &amp; match energy pulses! Arrow Keys/WASD/Swipe to control.</p>
+    </header>
+
+    <div id="game-container">
+        <canvas id="canvas"></canvas>
+
+        <div class="ui-overlay">
+            <div class="hud">
+                <div class="stat-box">
+                    <div class="stat-label">Score</div>
+                    <div class="stat-value" id="score-val">0</div>
+                </div>
+                <div class="stat-box" style="text-align: right;">
+                    <div class="stat-label">Multiplier</div>
+                    <div class="stat-value" id="mult-val" style="color: #00f3ff;">x1.0</div>
+                </div>
+            </div>
+
+            <!-- Touch Overlay Controls for Mobile -->
+            <div class="mobile-controls">
+                <div class="touch-btn btn-left" id="t-left">◀</div>
+                <div class="touch-btn btn-jump" id="t-jump">▲ JUMP</div>
+                <div class="touch-btn btn-slide" id="t-slide">▼ SLIDE</div>
+                <div class="touch-btn btn-right" id="t-right">▶</div>
+            </div>
+        </div>
+
+        <!-- Start/Game Over Screen -->
+        <div class="center-screen" id="menu-screen">
+            <div class="title-text" id="menu-title">READY TO SHIFT?</div>
+            <div class="subtitle-text" id="menu-desc">Switch lanes, jump over low energy barriers, and slide under high beams! Collect orbs to charge overdrive.</div>
+            <div style="font-size: 0.9rem; color: #ffd700; margin-bottom: 8px;" id="high-score-text">Best: 0</div>
+            <button class="btn" id="start-btn">LAUNCH</button>
+        </div>
+    </div>
+
+    <footer>Created by <span>NexCore Games</span></footer>
+
+    <script>
+        // Synthesized Audio System
+        const AudioSys = {
+            ctx: null,
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            },
+            play(type) {
+                if (!this.ctx) return;
+                const ctx = this.ctx;
+                const now = ctx.currentTime;
+
+                if (type === 'jump') {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'slide') {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(80, now + 0.2);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                } else if (type === 'coin') {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.setValueAtTime(1200, now + 0.06);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.18);
+                } else if (type === 'shield') {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.25);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'hit') {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, now);
+                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            }
+        };
+
+        // Canvas & Setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score-val');
+        const multEl = document.getElementById('mult-val');
+        const menuScreen = document.getElementById('menu-screen');
+        const menuTitle = document.getElementById('menu-title');
+        const menuDesc = document.getElementById('menu-desc');
+        const highScoreText = document.getElementById('high-score-text');
+        const startBtn = document.getElementById('start-btn');
+
+        let W = 0, H = 0;
+        function resize() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            W = canvas.width;
+            H = canvas.height;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Highscore
+        let highScore = localStorage.getItem('flux_high_score') || 0;
+        highScoreText.textContent = `Best: ${Math.floor(highScore)}`;
+
+        // Game Constants
+        const LANES = [-1, 0, 1]; // Left, Center, Right
+        const FOV = 220;
+        const HORIZON_Y_RATIO = 0.38;
+
+        // State variables
+        let isRunning = false;
+        let score = 0;
+        let distance = 0;
+        let speed = 22; // Initial Z speed
+        let speedMultiplier = 1.0;
+        let shieldActive = false;
+
+        // Player object
+        const player = {
+            lane: 0,
+            x: 0, // Target interpolated
+            y: 0, // Jump height
+            vy: 0,
+            isJumping: false,
+            isSliding: false,
+            slideTimer: 0,
+            width: 36,
+            height: 60
+        };
+
+        // Track obstacles and powerups
+        let objects = [];
+        let particles = [];
+        let trackOffset = 0;
+        let lastSpawnZ = 1200;
+
+        // Project 3D lane coordinates to 2D screen
+        function project(laneX, yVal, zVal) {
+            const horizonY = H * HORIZON_Y_RATIO;
+            const scale = FOV / (FOV + zVal);
+            const laneWidthAtBottom = W * 0.32;
+            const screenX = (W / 2) + (laneX * laneWidthAtBottom * scale);
+            const groundY = horizonY + (H * 0.58) * scale;
+            const screenY = groundY - (yVal * scale);
+            return { x: screenX, y: screenY, scale: scale, groundY: groundY };
+        }
+
+        function resetGame() {
+            score = 0;
+            distance = 0;
+            speed = 22;
+            speedMultiplier = 1.0;
+            shieldActive = false;
+            player.lane = 0;
+            player.x = 0;
+            player.y = 0;
+            player.vy = 0;
+            player.isJumping = false;
+            player.isSliding = false;
+            player.slideTimer = 0;
+            objects = [];
+            particles = [];
+            trackOffset = 0;
+            lastSpawnZ = 1000;
+
+            scoreEl.textContent = '0';
+            multEl.textContent = 'x1.0';
+        }
+
+        function spawnObject() {
+            const lane = LANES[Math.floor(Math.random() * LANES.length)];
+            const typeRand = Math.random();
+            let type = 'LOW_BARRIER';
+
+            if (typeRand < 0.4) {
+                type = 'LOW_BARRIER'; // Jump over
+            } else if (typeRand < 0.7) {
+                type = 'HIGH_BARRIER'; // Slide under
+            } else if (typeRand < 0.88) {
+                type = 'ORB'; // Collectible score
+            } else {
+                type = 'SHIELD'; // Shield powerup
+            }
+
+            // Prevent blocking all 3 lanes completely at exact same spot
+            objects.push({
+                lane: lane,
+                z: lastSpawnZ,
+                type: type,
+                collected: false,
+                hit: false
+            });
+
+            // Occasional double spawns on higher speed
+            if (speed > 35 && Math.random() < 0.4 && type !== 'SHIELD') {
+                const otherLanes = LANES.filter(l => l !== lane);
+                const lane2 = otherLanes[Math.floor(Math.random() * otherLanes.length)];
+                objects.push({
+                    lane: lane2,
+                    z: lastSpawnZ,
+                    type: typeRand < 0.5 ? 'LOW_BARRIER' : 'ORB',
+                    collected: false,
+                    hit: false
+                });
+            }
+
+            // Distance gap based on current speed
+            const gap = Math.max(180, 420 - speed * 4);
+            lastSpawnZ += gap;
+        }
+
+        // Particle system
+        function createParticles(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 1.0,
+                    decay: Math.random() * 0.05 + 0.02,
+                    color: color,
+                    size: Math.random() * 4 + 2
+                });
+            }
+        }
+
+        // Action Handlers
+        function moveLeft() {
+            if (!isRunning) return;
+            if (player.lane > -1) player.lane--;
+        }
+
+        function moveRight() {
+            if (!isRunning) return;
+            if (player.lane < 1) player.lane++;
+        }
+
+        function jump() {
+            if (!isRunning) return;
+            if (!player.isJumping) {
+                player.isJumping = true;
+                player.vy = 14;
+                player.isSliding = false;
+                AudioSys.play('jump');
+            }
+        }
+
+        function slide() {
+            if (!isRunning) return;
+            if (!player.isSliding) {
+                player.isSliding = true;
+                player.slideTimer = 32; // frames
+                if (player.isJumping) {
+                    player.vy = -12; // Fast fall
+                }
+                AudioSys.play('slide');
+            }
+        }
+
+        // Input Listeners
+        window.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight();
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') jump();
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') slide();
+        });
+
+        // Touch & Swipe Controls
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (!touchStartX || !touchStartY) return;
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = e.changedTouches[0].clientY - touchStartY;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+
+            if (Math.max(absDx, absDy) > 20) {
+                if (absDx > absDy) {
+                    if (dx > 0) moveRight();
+                    else moveLeft();
+                } else {
+                    if (dy < 0) jump();
+                    else slide();
+                }
+            }
+            touchStartX = 0;
+            touchStartY = 0;
+        }, { passive: true });
+
+        // Touch buttons
+        document.getElementById('t-left').addEventListener('pointerdown', (e) => { e.preventDefault(); moveLeft(); });
+        document.getElementById('t-right').addEventListener('pointerdown', (e) => { e.preventDefault(); moveRight(); });
+        document.getElementById('t-jump').addEventListener('pointerdown', (e) => { e.preventDefault(); jump(); });
+        document.getElementById('t-slide').addEventListener('pointerdown', (e) => { e.preventDefault(); slide(); });
+
+        startBtn.addEventListener('click', () => {
+            AudioSys.init();
+            menuScreen.classList.add('hidden');
+            resetGame();
+            isRunning = true;
+        });
+
+        function triggerGameOver() {
+            isRunning = false;
+            AudioSys.play('hit');
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('flux_high_score', highScore);
+            }
+
+            menuTitle.textContent = "CRASHED!";
+            menuDesc.innerHTML = `Final Score: <b>${Math.floor(score)}</b><br>Top Speed Reached: <b>${Math.floor(speed * 10)} km/h</b>`;
+            highScoreText.textContent = `Best: ${Math.floor(highScore)}`;
+            startBtn.textContent = "RETRY";
+            menuScreen.classList.remove('hidden');
+        }
+
+        // Main Game Loop
+        let lastTime = performance.now();
+
+        function updateGame(dt) {
+            // Speed progression
+            speed = Math.min(55, 22 +
