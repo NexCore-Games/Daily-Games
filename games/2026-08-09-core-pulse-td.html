@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Core Pulse TD</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  body {
+    background: #080b12;
+    color: #e0e6ed;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    overflow: hidden;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 0.8rem;
+    color: #8a99ad;
+    margin-top: 2px;
+  }
+  #game-container {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    background: #0f1522;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 20px rgba(79,172,254,0.15);
+    border: 1px solid rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+  }
+  .footer {
+    margin-top: 10px;
+    font-size: 0.75rem;
+    color: #5a6e85;
+    letter-spacing: 0.5px;
+  }
+  .footer span {
+    color: #ff007a;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="title">Core Pulse TD</div>
+  <div class="subtitle">Maze enemies, place towers, and protect the Core!</div>
+</div>
+
+<div id="game-container">
+  <canvas id="canvas" width="480" height="620"></canvas>
+</div>
+
+<div class="footer">
+  Crafted by <span>NexCore Games</span>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // --- Constants & Config ---
+  const GRID_SIZE = 6;
+  const OFFSET_X = 24;
+  const OFFSET_Y = 80;
+  const CELL_SIZE = 72; // 6 * 72 = 432px wide grid
+  
+  const START_NODE = { r: 0, c: 0 };
+  const END_NODE = { r: 5, c: 5 };
+
+  // Tower Definitions
+  const TOWERS = {
+    PULSE: {
+      id: 'PULSE',
+      name: 'Pulse Gun',
+      cost: 30,
+      range: 1.8,
+      damage: 14,
+      rate: 0.35, // seconds per shot
+      color: '#00f2fe',
+      desc: 'Fast single-target attack'
+    },
+    LASER: {
+      id: 'LASER',
+      name: 'Beam Laser',
+      cost: 55,
+      range: 2.2,
+      damage: 2.2, // per tick
+      rate: 0.05,
+      color: '#ff007a',
+      desc: 'Melts high HP targets'
+    },
+    FROST: {
+      id: 'FROST',
+      name: 'Frost Emitter',
+      cost: 45,
+      range: 1.6,
+      damage: 4,
+      rate: 0.8,
+      slow: 0.45, // 45% slow
+      color: '#00e5ff',
+      desc: 'Slows down nearby creeps'
+    },
+    TESLA: {
+      id: 'TESLA',
+      name: 'Tesla Coil',
+      cost: 80,
+      range: 2.0,
+      damage: 28,
+      rate: 1.1,
+      chains: 3,
+      color: '#a855f7',
+      desc: 'Chain lightning across foes'
+    }
+  };
+
+  // State Variables
+  let state = 'MENU'; // MENU, PLAYING, GAMEOVER, WIN
+  let energy = 100;
+  let coreHp = 20;
+  let maxCoreHp = 20;
+  let wave = 0;
+  let score = 0;
+  let waveInProgress = false;
+  let spawnTimer = 0;
+  let creepsToSpawn = [];
+  let selectedBuild = 'PULSE';
+  let selectedTile = null;
+  let gameSpeed = 1;
+
+  let grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+  let path = [];
+  let creeps = [];
+  let projectiles = [];
+  let particles = [];
+  let floatingTexts = [];
+
+  // Floating text feedback
+  function addFloatingText(x, y, text, color = '#fff') {
+    floatingTexts.push({ x, y, text, color, life: 1.0 });
+  }
+
+  // --- Pathfinding (BFS) ---
+  function findPath(testGrid = grid) {
+    let queue = [[START_NODE]];
+    let visited = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+    visited[START_NODE.r][START_NODE.c] = true;
+
+    const dr = [-1, 1, 0, 0];
+    const dc = [0, 0, -1, 1];
+
+    while (queue.length > 0) {
+      let currentPath = queue.shift();
+      let last = currentPath[currentPath.length - 1];
+
+      if (last.r === END_NODE.r && last.c === END_NODE.c) {
+        return currentPath;
+      }
+
+      for (let i = 0; i < 4; i++) {
+        let nr = last.r + dr[i];
+        let nc = last.c + dc[i];
+
+        if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+          if (!visited[nr][nc] && !testGrid[nr][nc]) {
+            visited[nr][nc] = true;
+            queue.push([...currentPath, { r: nr, c: nc }]);
+          }
+        }
+      }
+    }
+    return null; // Blocked!
+  }
+
+  function recalculatePath() {
+    let newPath = findPath();
+    if (newPath) {
+      path = newPath;
+      return true;
+    }
+    return false;
+  }
+
+  // --- Game Initialization ---
+  function initGame() {
+    grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+    energy = 110;
+    coreHp = 20;
+    wave = 0;
+    score = 0;
+    creeps = [];
+    projectiles = [];
+    particles = [];
+    floatingTexts = [];
+    waveInProgress = false;
+    selectedTile = null;
+    recalculatePath();
+    state = 'PLAYING';
+  }
+
+  // --- Wave Logic ---
+  function startNextWave() {
+    if (waveInProgress || state !== 'PLAYING') return;
+    wave++;
+    waveInProgress = true;
+    creepsToSpawn = [];
+
+    let count = 6 + wave * 3;
+    let baseHp = 30 + Math.pow(wave, 1.8) * 12;
+    let baseSpeed = 1.2 + Math.min(1.0, wave * 0.05);
+
+    for (let i = 0; i < count; i++) {
+      let type = 'NORMAL';
+      if (wave % 4 === 0 && i % 4 === 0) type = 'TANK';
+      else if (wave > 2 && i % 3 === 0) type = 'FAST';
+
+      let hp = baseHp;
+      let speed = baseSpeed;
+      let size = 12;
+      let color = '#ff3366';
+      let reward = 12 + wave;
+
+      if (type === 'TANK') {
+        hp *= 2.8;
+        speed *= 0.65;
+        size = 16;
+        color = '#ff9900';
+        reward *= 2;
+      } else if (type === 'FAST') {
+        hp *= 0.6;
+        speed *= 1.6;
+        size = 9;
+        color = '#cc00ff';
+      }
+
+      creepsToSpawn.push({ type, hp, maxHp: hp, speed, size, color, reward });
+    }
+  }
+
+  function spawnCreep(data) {
+    creeps.push({
+      ...data,
+      x: OFFSET_X + START_NODE.c * CELL_SIZE + CELL_SIZE / 2,
+      y: OFFSET_Y + START_NODE.r * CELL_SIZE + CELL_SIZE / 2,
+      pathIndex: 0,
+      slowTimer: 0,
+      slowFactor: 1
+    });
+  }
+
+  // --- Building Logic ---
+  function handleGridClick(r, c) {
+    if ((r === START_NODE.r && c === START_NODE.c) || (r === END_NODE.r && c === END_NODE.c)) {
+      return;
+    }
+
+    if (grid[r][c]) {
+      // Tile occupied -> select for upgrade/sell
+      selectedTile = { r, c };
+      return;
+    }
+
+    selectedTile = null;
+
+    // Try to build tower
+    let tConfig = TOWERS[selectedBuild];
+    if (energy < tConfig.cost) {
+      addFloatingText(OFFSET_X + c * CELL_SIZE + 36, OFFSET_Y + r * CELL_SIZE + 36, 'Need Energy!', '#ff3366');
+      return;
+    }
+
+    // Temporarily place tower to test path
+    grid[r][c] = {
+      type: selectedBuild,
+      level: 1,
+      cooldown: 0,
+      target: null,
+      angle: 0
+    };
+
+    if (!recalculatePath()) {
+      // Blocking path! Revert
+      grid[r][c] = null;
+      recalculatePath();
+      addFloatingText(OFFSET_X + c * CELL_SIZE + 36, OFFSET_Y + r * CELL_SIZE + 36, 'Path Blocked!', '#ff3366');
+      return;
+    }
+
+    // Success! Pay cost
+    energy -= tConfig.cost;
+    // Spawn particles
+    createSparks(OFFSET_X + c * CELL_SIZE + 36, OFFSET_Y + r * CELL_SIZE + 36, tConfig.color, 12);
+  }
+
+  function upgradeSelected() {
+    if (!selectedTile) return;
+    let t = grid[selectedTile.r][selectedTile.c];
+    if (!t) return;
+
+    let cost = Math.floor(TOWERS[t.type].cost * 0.8 * t.level);
+    if (energy >= cost) {
+      energy -= cost;
+      t.level++;
+      createSparks(OFFSET_X + selectedTile.c * CELL_SIZE + 36, OFFSET_Y + selectedTile.r * CELL_SIZE + 36, '#00ffcc', 15);
+      addFloatingText(OFFSET_X + selectedTile.c * CELL_SIZE + 36, OFFSET_Y + selectedTile.r * CELL_SIZE + 20, 'UPGRADED!', '#00ffcc');
+    } else {
+      addFloatingText(OFFSET_X + selectedTile.c * CELL_SIZE + 36, OFFSET_Y + selectedTile.r * CELL_SIZE + 20, 'Not Enough Energy!', '#ff3366');
+    }
+  }
+
+  function sellSelected() {
+    if (!selectedTile) return;
+    let t = grid[selectedTile.r][selectedTile.c];
+    if (!t) return;
+
+    let refund = Math.floor(TOWERS[t.type].cost * 0.6 * t.level);
+    energy += refund;
+    grid[selectedTile.r][selectedTile.c] = null;
+    selectedTile = null;
+    recalculatePath();
+  }
+
+  // --- Visual Particles ---
+  function createSparks(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+      let ang = Math.random() * Math.PI * 2;
+      let spd = 1 + Math.random() * 4;
+      particles.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        color,
+        life: 1.0,
+        decay: 0.03 + Math.random() * 0.04
+      });
+    }
+  }
+
+  // --- Main Game Loop Update ---
+  let lastTime = performance.now();
+  function update(dt) {
+    if (state !== 'PLAYING') return;
+
+    dt *= gameSpeed;
+
+    // Spawner
+    if (waveInProgress && creepsToSpawn.length > 0) {
+      spawnTimer += dt;
+      if (spawnTimer >= 0.6) {
+        spawnTimer = 0;
+        spawnCreep(creepsToSpawn.shift());
+      }
+    }
+
+    // Creep movement & path recalculation sync
+    for (let i = creeps.length - 1; i >= 0; i--) {
+      let c = creeps[i];
+
+      // Handle slow timer
+      if (c.slowTimer > 0) {
+        c.slowTimer -= dt;
+        if (c.slowTimer <= 0) c.slowFactor = 1;
+      }
+
+      let effSpeed = c.speed * c.slowFactor * CELL_SIZE * 0.55 * dt;
+
+      // Current target cell in path
+      let targetNode = path[c.pathIndex + 1];
+      if (!targetNode) {
+        // Reached end!
+        coreHp -= (c.type === 'TANK' ? 3 : 1);
+        createSparks(c.x, c.y, '#ff0055', 12);
+        creeps.splice(i, 1);
+
+        if (coreHp <= 0) {
+          coreHp = 0;
+          state = 'GAMEOVER';
+        }
+        continue;
+      }
+
+      let tx = OFFSET_X + targetNode.c * CELL_SIZE + CELL_SIZE / 2;
+      let ty = OFFSET_Y + targetNode.r * CELL_SIZE + CELL_SIZE / 2;
+
+      let dx = tx - c.x;
+      let dy = ty - c.y;
+      let dist = Math.hypot(dx, dy);
+
+      if (dist < effSpeed) {
+        c.x = tx;
+        c.y = ty;
+        c.pathIndex++;
+      } else {
+        c.x += (dx / dist) * effSpeed;
+        c.y += (dy / dist) * effSpeed;
+      }
+    }
+
+    // Check Wave Finish
+    if (waveInProgress && creepsToSpawn.length === 0 && creeps.length === 0) {
+      waveInProgress = false;
+      let bonus = 25 + wave * 5;
+      energy += bonus;
+      score += 100 * wave;
+      addFloatingText(240, 300, `WAVE ${wave} CLEAR! +$${bonus}`, '#00f2fe');
+
+      if (wave >= 15) {
+        state = 'WIN';
+      }
+    }
+
+    // Tower Actions
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        let t = grid[r][c];
+        if (!t) continue;
+
+        let cfg = TOWERS[t.type];
+        let tx = OFFSET_X + c * CELL_SIZE + CELL_SIZE / 2;
+        let ty = OFFSET_Y + r * CELL_SIZE + CELL_SIZE / 2;
+        let rangePx = cfg.range * CELL_SIZE;
+
+        // Find Target
+        let bestTarget = null;
+        let bestProgress = -1;
+
+        for (let creep of creeps) {
+          let dist = Math.hypot(creep.x - tx, creep.y - ty);
+          if (dist <= rangePx) {
+            let progress = creep.pathIndex + (1 - Math.hypot(OFFSET_X + path[Math.min(creep.pathIndex + 1, path.length - 1)].c * CELL_SIZE + CELL_SIZE / 2 - creep.x, OFFSET_Y + path[Math.min(creep.pathIndex + 1, path.length - 1)].r * CELL_SIZE + CELL_SIZE / 2 - creep.y) / CELL_SIZE);
+            if (progress > bestProgress) {
+              bestProgress = progress;
+              bestTarget = creep;
+            }
+          }
+        }
+
+        t.target = bestTarget;
+
+        if (t.target) {
+          t.angle = Math.atan2(t.target.y - ty, t.target.x - tx);
+
+          // Firing Logic
+          t.cooldown = (t.cooldown || 0) - dt;
+          if (t.cooldown <= 0) {
+            let mult = 1 + (t.level - 1) * 0.4;
+
+            if (t.type === 'PULSE') {
+              projectiles.push({
+                x: tx, y: ty,
+                target: t.target,
+                speed: 400,
+                damage: cfg.damage * mult,
+                color: cfg.color
+              });
+              t.cooldown = cfg.rate;
+            } else if (t.type === 'LASER') {
+              // Direct continuous beam damage
+              t.target.hp -= cfg.damage * mult;
+              createSparks(t.target.x, t.target.y, cfg.color, 1);
+              if (t.target.hp <= 0) handleCreepKill(t.target);
+              t.cooldown = cfg.rate;
+            } else if (t.type === 'FROST') {
+              // AoE Slow
+              for (let creep of creeps) {
+                if (Math.hypot(creep.x - tx, creep.y - ty) <= rangePx) {
+                  creep.slowFactor = cfg.slow;
+                  creep.slowTimer = 0.5;
+                  creep.hp -= cfg.damage * mult;
+                  if (creep.hp <= 0) handleCreepKill(creep);
+                }
+              }
+              createSparks(tx, ty, cfg.color, 10);
+              t.cooldown = cfg.rate;
+            } else if (t.type === 'TESLA') {
+              // Chain Lightning
+              let hitList = [t.target];
+              let dmg = cfg.damage * mult;
+              t.target.hp -= dmg;
+              if (t.target.hp <= 0) handleCreepKill(t.target);
+
+              let lastTarget = t.target;
+              for (let ch = 1; ch < cfg.chains; ch++) {
+                let nextTarget = null;
+                let minDist = 120;
+                for (let creep of creeps) {
+                  if (!hitList.includes(creep)) {
+                    let d = Math.hypot(creep.x - lastTarget.x, creep.y - lastTarget.y);
+                    if (d < minDist) {
+                      minDist = d;
+                      nextTarget = creep;
+                    }
+                  }
+                }
+                if (nextTarget) {
+                  hitList.push(nextTarget);
+                  nextTarget.hp -= dmg * 0.7;
+                  if (nextTarget.hp <= 0) handleCreepKill(nextTarget);
+                  lastTarget = nextTarget;
+                } else break;
+              }
+
+              // Visual chain lightning
+              for (let k = 0; k < hitList.length - 1; k++) {
+                createSparks((hitList[k].x + hitList[k+1].x)/2, (hitList[k].y + hitList[k+1].y)/2, cfg.color, 4);
+              }
+
+              t.cooldown = cfg.rate;
+            }
+          }
+        }
+      }
+    }
+
+    // Update Projectiles
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      let p = projectiles[i];
+      let dx = p.target.x - p.x;
+      let dy = p.target.y - p.y;
+      let dist = Math.hypot(dx, dy);
+
+      if (dist < 10 || !creeps.includes(p.target)) {
+        if (creeps.includes(p.target)) {
+          p.target.hp -= p.damage;
+          createSparks(p.target.x, p.target.y, p.color, 5);
+          if (p.target.hp <= 0) handleCreepKill(p.target);
+        }
+        projectiles.splice(i, 1);
+      } else {
+        p.x += (dx / dist) * p.speed * dt;
+        p.y += (dy / dist) * p.speed * dt;
+      }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      let pt = particles[i];
+      pt.x += pt.vx;
+      pt.y += pt.vy;
+      pt.life -= pt.decay;
+      if (pt.life <= 0) particles.splice(i, 1);
+    }
+
+    // Floating Text
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      let ft = floatingTexts[i];
+      ft.y -= 20 * dt;
+      ft.life -= dt;
+      if (ft.life <= 0) floatingTexts.splice(i, 1);
+    }
+  }
+
+  function handleCreepKill(creep) {
+    let idx = creeps.indexOf(creep);
+    if (idx !== -1) {
+      creeps.splice(idx, 1);
+      energy += creep.reward;
+      score += creep.reward * 10;
+      createSparks(creep.x, creep.y, creep.color, 15);
+      addFloatingText(creep.x, creep.y, `+$${creep.reward}`, '#ffcc00');
+    }
+  }
+
+  // --- Rendering ---
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (state === 'MENU') {
+      renderMenu();
+      return;
+    }
+
+    // Background
+    ctx.fillStyle = '#0b0f19';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Top HUD Bar
+    ctx.fillStyle = '#141c2e';
+    ctx.fillRect(0, 0, canvas.width, 68);
+
+    // Stats Text
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#ff3366';
+    ctx.fillText(`❤️ CORE: ${coreHp}/${maxCoreHp}`, 16, 28);
+
+    ctx.fillStyle = '#ffcc00';
+    ctx.fillText(`⚡ ENERGY: ${energy}`, 150, 28);
+
+    ctx.fillStyle = '#00f2fe';
+    ctx.fillText(`🌊 WAVE: ${wave}/15`, 290, 28);
+
+    ctx.fillStyle = '#a855f7';
+    ctx.fillText(`⭐ SCORE: ${score}`, 16, 52);
+
+    // Speed Toggle Button
+    ctx.fillStyle = gameSpeed > 1 ? '#00f2fe' : '#22304a';
+    ctx.beginPath();
+    ctx.roundRect(380, 16, 84, 36, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(gameSpeed > 1 ? '⏩ 2X SPEED' : '▶ 1X SPEED', 422, 38);
