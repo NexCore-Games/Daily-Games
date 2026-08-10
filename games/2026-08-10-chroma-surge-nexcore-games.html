@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Chroma Surge - NexCore Games</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      background: #090a12;
+      color: #fff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .game-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100vh;
+      max-height: 800px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+    }
+    header {
+      width: 100%;
+      text-align: center;
+      z-index: 10;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #ff3366, #00f0ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+      margin-bottom: 2px;
+    }
+    .instructions {
+      font-size: 0.78rem;
+      color: #a0a5c0;
+      margin-bottom: 6px;
+    }
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      max-width: 440px;
+      max-height: 520px;
+      border-radius: 20px;
+      background: #111322;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.02);
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 10, 18, 0.88);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px;
+      z-index: 20;
+      padding: 20px;
+      text-align: center;
+      transition: opacity 0.25s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .btn {
+      background: linear-gradient(135deg, #ff3366, #ff0055);
+      color: white;
+      border: none;
+      padding: 14px 36px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(255, 51, 102, 0.4);
+      transition: transform 0.15s, box-shadow 0.15s;
+      margin-top: 15px;
+      letter-spacing: 1px;
+    }
+    .btn:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 10px rgba(255, 51, 102, 0.4);
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 18px;
+      border-radius: 12px;
+      margin: 6px 0;
+      width: 80%;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.95rem;
+    }
+    footer {
+      font-size: 0.72rem;
+      color: #626880;
+      padding: 6px 0;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      z-index: 10;
+    }
+    footer span {
+      color: #ff3366;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-wrapper">
+    <header>
+      <h1>CHROMA SURGE</h1>
+      <p class="instructions">Match center item to target bin using ACTIVE RULE (Color or Shape)!</p>
+    </header>
+
+    <div class="canvas-container">
+      <canvas id="gameCanvas" width="400" height="480"></canvas>
+
+      <div id="startOverlay" class="overlay">
+        <h2 style="font-size: 2rem; margin-bottom: 10px; color: #00f0ff;">SPEED SORTER</h2>
+        <p style="color: #c0c5e0; font-size: 0.9rem; max-width: 280px; line-height: 1.4; margin-bottom: 15px;">
+          Fast brain-teaser! Swipe, click bins, or use <b>WASD / Arrow Keys</b> to route items before time runs out.
+        </p>
+        <button class="btn" onclick="startGame()">PLAY NOW</button>
+      </div>
+
+      <div id="gameOverOverlay" class="overlay hidden">
+        <h2 style="font-size: 2.2rem; color: #ff3366; margin-bottom: 5px;">TIME'S UP!</h2>
+        <p style="color: #a0a5c0; font-size: 0.85rem; margin-bottom: 15px;">Great reaction test!</p>
+        
+        <div class="stat-box"><span>Score:</span><strong id="finalScore" style="color: #00f0ff;">0</strong></div>
+        <div class="stat-box"><span>Best Score:</span><strong id="bestScore" style="color: #ffcc00;">0</strong></div>
+        <div class="stat-box"><span>Max Combo:</span><strong id="maxCombo" style="color: #00ff88;">0x</strong></div>
+
+        <button class="btn" onclick="startGame()">PLAY AGAIN</button>
+      </div>
+    </div>
+
+    <footer>Crafted by <span>NexCore Games</span></footer>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Web Audio Synthesizer
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioCtx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'correct') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          osc.start(now);
+          osc.stop(now + 0.12);
+        } else if (type === 'wrong') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(90, now + 0.2);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } else if (type === 'shift') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(600, now + 0.25);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        }
+      } catch(e){}
+    }
+
+    // Definitions
+    const TYPES = [
+      { id: 0, name: 'RED', color: '#ff3366', shape: 'circle' },
+      { id: 1, name: 'CYAN', color: '#00f0ff', shape: 'square' },
+      { id: 2, name: 'GREEN', color: '#00ff88', shape: 'triangle' },
+      { id: 3, name: 'YELLOW', color: '#ffcc00', shape: 'star' }
+    ];
+
+    const BIN_POSITIONS = [
+      { dir: 'UP', x: 200, y: 85, key: ['ArrowUp', 'KeyW'] },
+      { dir: 'RIGHT', x: 325, y: 240, key: ['ArrowRight', 'KeyD'] },
+      { dir: 'DOWN', x: 200, y: 395, key: ['ArrowDown', 'KeyS'] },
+      { dir: 'LEFT', x: 75, y: 240, key: ['ArrowLeft', 'KeyA'] }
+    ];
+
+    // Game Variables
+    let gameState = 'START'; // START, PLAYING, GAMEOVER
+    let score = 0;
+    let highScore = localStorage.getItem('chromasurge_hi') || 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let lives = 3;
+    
+    let activeRule = 'COLOR'; // 'COLOR' or 'SHAPE'
+    let currentItem = null;
+    let timer = 1.0; // 0.0 to 1.0
+    let timerDuration = 2200; // ms per item
+    let lastTime = 0;
+    
+    let particles = [];
+    let floatingTexts = [];
+    let ruleBannerTimer = 0;
+    let screenShake = 0;
+
+    // Center Item Scale Animation
+    let itemScale = 0;
+
+    function resetGame() {
+      score = 0;
+      combo = 0;
+      maxCombo = 0;
+      lives = 3;
+      activeRule = 'COLOR';
+      timerDuration = 2000;
+      particles = [];
+      floatingTexts = [];
+      spawnItem();
+    }
+
+    function spawnItem() {
+      // Pick random color and shape indices independently for Stroop effect!
+      const colorIdx = Math.floor(Math.random() * 4);
+      const shapeIdx = Math.floor(Math.random() * 4);
+      
+      currentItem = {
+        colorIdx: colorIdx,
+        shapeIdx: shapeIdx,
+        color: TYPES[colorIdx].color,
+        shape: TYPES[shapeIdx].shape
+      };
+
+      timer = 1.0;
+      itemScale = 0; // for pop animation
+
+      // Scale difficulty
+      timerDuration = Math.max(650, 2100 - (score * 35));
+
+      // Dynamic Rule Switch after score 8
+      if (score >= 8 && Math.random() < 0.35) {
+        const oldRule = activeRule;
+        activeRule = Math.random() < 0.5 ? 'COLOR' : 'SHAPE';
+        if (oldRule !== activeRule) {
+          playSound('shift');
+          ruleBannerTimer = 1.2; // Show banner
+        }
+      }
+    }
+
+    function handleSort(binIndex) {
+      if (gameState !== 'PLAYING') return;
+
+      // Determine correct bin index based on rule
+      const correctBinIdx = (activeRule === 'COLOR') ? currentItem.colorIdx : currentItem.shapeIdx;
+
+      if (binIndex === correctBinIdx) {
+        // Success
+        playSound('correct');
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+        const pts = 10 * (1 + Math.floor(combo / 5));
+        score += pts;
+
+        createSplatter(BIN_POSITIONS[binIndex].x, BIN_POSITIONS[binIndex].y, currentItem.color);
+        addFloatingText(`+${pts}`, BIN_POSITIONS[binIndex].x, BIN_POSITIONS[binIndex].y, currentItem.color);
+
+        if (combo % 5 === 0) {
+          addFloatingText(`${combo}x COMBO!`, 200, 200, '#00f0ff');
+        }
+
+        spawnItem();
+      } else {
+        // Fail
+        playSound('wrong');
+        triggerError();
+      }
+    }
+
+    function triggerError() {
+      combo = 0;
+      lives--;
+      screenShake = 15;
+      createSplatter(200, 240, '#ff3366');
+      addFloatingText('MISS!', 200, 240, '#ff3366');
+
+      if (lives <= 0) {
+        gameOver();
+      } else {
+        spawnItem();
+      }
+    }
+
+    function gameOver() {
+      gameState = 'GAMEOVER';
+      playSound('wrong');
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('chromasurge_hi', highScore);
+      }
+      document.getElementById('finalScore').innerText = score;
+      document.getElementById('bestScore').innerText = highScore;
+      document.getElementById('maxCombo').innerText = maxCombo + 'x';
+      document.getElementById('gameOverOverlay').classList.remove('hidden');
+    }
+
+    function startGame() {
+      initAudio();
+      resetGame();
+      gameState = 'PLAYING';
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('gameOverOverlay').classList.add('hidden');
+    }
+
+    // Drawing Functions
+    function drawShape(shape, x, y, size, color) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+
+      if (shape === 'circle') {
+        ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      } else if (shape === 'square') {
+        const half = size / 2;
+        ctx.roundRect ? ctx.roundRect(x - half, y - half, size, size, 8) : ctx.
