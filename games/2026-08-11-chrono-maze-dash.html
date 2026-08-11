@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chrono Maze Dash</title>
+<style>
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background: #08090f;
+    color: #e0e6ed;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    overflow: hidden;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #00f3ff, #ff007f);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    text-shadow: 0 0 15px rgba(0,243,255,0.3);
+  }
+  .subtitle {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+  #hud {
+    display: flex;
+    gap: 16px;
+    background: rgba(18, 22, 36, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 18px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+  }
+  .hud-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hud-label {
+    font-size: 0.65rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .hud-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #00f3ff;
+  }
+  #time-val.warning {
+    color: #ff3366;
+    animation: pulse 0.5s infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.15); }
+  }
+  #game-container {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    background: #0f1322;
+    border-radius: 12px;
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.8), 0 0 2px #00f3ff;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 9, 15, 0.88);
+    backdrop-filter: blur(6px);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    text-align: center;
+    z-index: 10;
+    transition: opacity 0.2s ease;
+  }
+  .overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .overlay h2 {
+    font-size: 1.8rem;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+  .overlay p {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin-bottom: 20px;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+  .btn {
+    background: linear-gradient(135deg, #00f3ff, #0066ff);
+    color: #000;
+    font-weight: 800;
+    border: none;
+    padding: 12px 28px;
+    font-size: 1rem;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 0 5px rgba(0, 243, 255, 0.4);
+  }
+  /* Controls D-Pad */
+  #controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    width: 180px;
+    height: 120px;
+    margin-top: 8px;
+  }
+  .dbtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #00f3ff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .dbtn:active {
+    background: rgba(0, 243, 255, 0.25);
+  }
+  .dbtn-up { grid-column: 2; grid-row: 1; }
+  .dbtn-left { grid-column: 1; grid-row: 2; }
+  .dbtn-down { grid-column: 2; grid-row: 2; }
+  .dbtn-right { grid-column: 3; grid-row: 2; }
+
+  footer {
+    font-size: 0.7rem;
+    color: #475569;
+    margin-top: 4px;
+  }
+  footer span {
+    color: #ff007f;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Chrono Dash</h1>
+  <div class="subtitle">Navigate to the portal before time expires! Pick up yellow shards for +time.</div>
+</header>
+
+<div id="hud">
+  <div class="hud-card">
+    <div class="hud-label">Level</div>
+    <div class="hud-value" id="level-val">1</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Time</div>
+    <div class="hud-value" id="time-val">15.0</div>
+  </div>
+  <div class="hud-card">
+    <div class="hud-label">Score</div>
+    <div class="hud-value" id="score-val">0</div>
+  </div>
+</div>
+
+<div id="game-container">
+  <canvas id="canvas" width="400" height="400"></canvas>
+
+  <!-- Start Overlay -->
+  <div id="start-overlay" class="overlay">
+    <h2>CHRONO DASH</h2>
+    <p>Use WASD, Arrow keys, or the on-screen D-Pad to reach the pink exit portal!</p>
+    <button class="btn" onclick="startGame()">Start Game</button>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="gameover-overlay" class="overlay hidden">
+    <h2 style="color:#ff3366;">TIME'S UP!</h2>
+    <p id="final-stats">You ran out of time.</p>
+    <button class="btn" onclick="restartGame()">Try Again</button>
+  </div>
+</div>
+
+<div id="controls">
+  <div class="dbtn dbtn-up" onmousedown="triggerMove('up')" ontouchstart="triggerMove('up'); event.preventDefault();">▲</div>
+  <div class="dbtn dbtn-left" onmousedown="triggerMove('left')" ontouchstart="triggerMove('left'); event.preventDefault();">◀</div>
+  <div class="dbtn dbtn-down" onmousedown="triggerMove('down')" ontouchstart="triggerMove('down'); event.preventDefault();">▼</div>
+  <div class="dbtn dbtn-right" onmousedown="triggerMove('right')" ontouchstart="triggerMove('right'); event.preventDefault();">▶</div>
+</div>
+
+<footer>Crafted by <span>NexCore Games</span></footer>
+
+<script>
+// Web Audio Synthesizer
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSfx(type) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+
+  if (type === 'move') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.04);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.04);
+    osc.start(now); osc.stop(now + 0.04);
+  } else if (type === 'shard') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.setValueAtTime(659.25, now + 0.06); // E5
+    osc.frequency.setValueAtTime(783.99, now + 0.12); // G5
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.2);
+    osc.start(now); osc.stop(now + 0.2);
+  } else if (type === 'trap') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.linearRampToValueAtTime(60, now + 0.15);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.15);
+    osc.start(now); osc.stop(now + 0.15);
+  } else if (type === 'win') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(554.37, now + 0.08);
+    osc.frequency.setValueAtTime(659.25, now + 0.16);
+    osc.frequency.setValueAtTime(880, now + 0.24);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.35);
+    osc.start(now); osc.stop(now + 0.35);
+  } else if (type === 'lose') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.4);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.4);
+    osc.start(now); osc.stop(now + 0.4);
+  }
+}
+
+// Game State Variables
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let level = 1;
+let score = 0;
+let timeLeft = 15.0;
+let maxTime = 15.0;
+let isPlaying = false;
+let lastTime = 0;
+
+let gridCols = 9;
+let gridRows = 9;
+let maze = [];
+let player = { x: 1, y: 1, px: 1, py: 1 };
+let exit = { x: 7, y: 7 };
+let shards = [];
+let traps = [];
+let particles = [];
+
+// DOM Elements
+const levelVal = document.getElementById('level-val');
+const timeVal = document.getElementById('time-val');
+const scoreVal = document.getElementById('score-val');
+const startOverlay = document.getElementById('start-overlay');
+const gameoverOverlay = document.getElementById('gameover-overlay');
+const finalStats = document.getElementById('final-stats');
+
+// DFS Maze Generator
+function generateMaze(cols, rows) {
+  let grid = Array(rows).fill(0).map(() => Array(cols).fill(1));
+  let stack = [];
+  grid[1][1] = 0;
+  stack.push([1, 1]);
+
+  while (stack.length > 0) {
+    let [r, c] = stack[stack.length - 1];
+    let neighbors = [];
+    let dirs = [[-2,0],[2,0],[0,-2],[0,2]];
+
+    for (let [dr, dc] of dirs) {
+      let nr = r + dr, nc = c + dc;
+      if (nr > 0 && nr < rows-1 && nc > 0 && nc < cols-1 && grid[nr][nc] === 1) {
+        neighbors.push([nr, nc, dr, dc]);
+      }
+    }
+
+    if (neighbors.length > 0) {
+      let [nr, nc, dr, dc] = neighbors[Math.floor(Math.random() * neighbors.length)];
+      grid[r + dr/2][c + dc/2] = 0;
+      grid[nr][nc] = 0;
+      stack.push([nr, nc]);
+    } else {
+      stack.pop();
+    }
+  }
+  return grid;
+}
+
+function initLevel() {
+  gridCols = 7 + Math.floor(level / 2) * 2;
+  gridRows = 7 + Math.floor(level / 2) * 2;
+  if (gridCols > 21) gridCols = 21;
+  if (gridRows > 21) gridRows = 21;
+
+  maze = generateMaze(gridCols, gridRows);
+
+  player.x = 1; player.y = 1;
+  player.px = 1; player.py = 1;
+
+  exit.x = gridCols - 2;
+  exit.y = gridRows - 2;
+
+  // Base time scales with grid size
+  maxTime = Math.max(8, 12 + Math.floor(gridCols * 0.8) - Math.floor(level * 0.3));
+  timeLeft = maxTime;
+
+  // Collect empty spaces for items
+  let emptyCells = [];
+  for (let r = 1; r < gridRows - 1; r++) {
+    for (let c = 1; c < gridCols - 1; c++) {
+      if (maze[r][c] === 0 && !(r === 1 && c === 1) && !(r === exit.y && c === exit.x)) {
+        emptyCells.push({x: c, y: r});
+      }
+    }
+  }
+
+  // Shuffle empty cells
+  emptyCells.sort(() => Math.random() - 0.5);
+
+  shards = [];
+  traps = [];
+  let shardCount = Math.min(4, Math.floor(emptyCells.length * 0.15) + 1);
+  let trapCount = Math.min(3, Math.floor(level / 2));
+
+  for (let i = 0; i < shardCount && emptyCells.length > 0; i++) {
+    shards.push(emptyCells.pop());
+  }
+  for (let i = 0; i < trapCount && emptyCells.length > 0; i++) {
+    traps.push(emptyCells.pop());
+  }
+
+  levelVal.textContent = level;
+  updateHUD();
+}
+
+function updateHUD() {
+  timeVal.textContent = Math.max(0, timeLeft).toFixed(1);
+  scoreVal.textContent = score;
+  if (timeLeft <= 4.0) {
+    timeVal.classList.add('warning');
+  } else {
+    timeVal.classList.remove('warning');
+  }
+}
+
+function startGame() {
+  level = 1;
+  score = 0;
+  startOverlay.classList.add('hidden');
+  gameoverOverlay.classList.add('hidden');
+  initLevel();
+  isPlaying = true;
+  lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function restartGame() {
+  startGame();
+}
+
+function triggerMove(dir) {
+  if (!isPlaying) return;
+  let dx = 0, dy = 0;
+  if (dir === 'up') dy = -1;
+  if (dir === 'down') dy = 1;
+  if (dir === 'left') dx = -1;
+  if (dir === 'right') dx = 1;
+
+  let nx = player.x + dx;
+  let ny = player.y + dy;
+
+  if (nx >= 0 && nx < gridCols && ny >= 0 && ny < gridRows) {
+    if (maze[ny][nx] === 0) {
+      player.x = nx;
+      player.y = ny;
+      playSfx('move');
+
+      // Add trail particles
+      addParticles(player.px, player.py, '#00f3ff', 3);
+
+      checkCollisions();
+    }
+  }
+}
+
+function addParticles(gx, gy, color, count) {
+  const cellSize = canvas.width / gridCols;
+  const cx = (gx + 0.5) * cellSize;
+  const cy = (gy + 0.5) * cellSize;
+  for (let i = 0; i < count; i++) {
+    particles.push
