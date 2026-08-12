@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chroma Pulse - NexCore Games</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      background: #08090d;
+      color: #fff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #game-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      height: 100vh;
+      max-height: 820px;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, #0f111a 0%, #08090d 100%);
+      box-shadow: 0 0 40px rgba(0, 243, 255, 0.15);
+      border-left: 1px solid rgba(255, 255, 255, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    header {
+      padding: 12px 16px 8px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      z-index: 10;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: 3px;
+      background: linear-gradient(90deg, #00f3ff, #ff007f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
+    }
+    p.instruction {
+      font-size: 0.75rem;
+      color: #a0a5c0;
+      margin-top: 2px;
+      letter-spacing: 0.5px;
+    }
+    #canvas-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 9, 13, 0.88);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      z-index: 20;
+      transition: opacity 0.25s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 14px 36px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #08090d;
+      background: linear-gradient(90deg, #00f3ff, #00ff66);
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn:active {
+      transform: scale(0.96);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin: 8px 0;
+      width: 100%;
+      max-width: 260px;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #8a8fa8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .stat-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+    }
+    footer {
+      padding: 8px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: #5a5f78;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(0, 0, 0, 0.2);
+    }
+    footer span {
+      color: #00f3ff;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <header>
+      <h1>CHROMA PULSE</h1>
+      <p class="instruction">Tap lanes or use D F J K / 1 2 3 4 on the beat!</p>
+    </header>
+
+    <div id="canvas-container">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- Start Overlay -->
+      <div id="start-overlay" class="overlay">
+        <h2 style="font-size: 2rem; margin-bottom: 10px; color: #00f3ff;">FEEL THE BEAT</h2>
+        <p style="color: #a0a5c0; font-size: 0.9rem; max-width: 280px; margin-bottom: 15px;">
+          Hit notes exactly as they reach the bottom ring. Build combos to multiply your score!
+        </p>
+        <div class="stat-box">
+          <div class="stat-label">High Score</div>
+          <div id="start-highscore" class="stat-val">0</div>
+        </div>
+        <button id="start-btn" class="btn">START GAME</button>
+      </div>
+
+      <!-- Game Over Overlay -->
+      <div id="gameover-overlay" class="overlay hidden">
+        <h2 style="font-size: 2rem; margin-bottom: 10px; color: #ff0055;">SYSTEM OVERLOAD</h2>
+        <div class="stat-box">
+          <div class="stat-label">Final Score</div>
+          <div id="final-score" class="stat-val">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Max Combo</div>
+          <div id="final-combo" class="stat-val">0x</div>
+        </div>
+        <button id="restart-btn" class="btn">TRY AGAIN</button>
+      </div>
+    </div>
+
+    <footer>
+      A Game by <span>NexCore Games</span>
+    </footer>
+  </div>
+
+  <script>
+    // System & Audio Setup
+    let audioCtx = null;
+    
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // Audio Synthesizer (Procedural Beat & SFX)
+    function playKick(time) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(130, time);
+      osc.frequency.exponentialRampToValueAtTime(30, time + 0.1);
+      gain.gain.setValueAtTime(0.7, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+      osc.start(time);
+      osc.stop(time + 0.12);
+    }
+
+    function playSnare(time) {
+      if (!audioCtx) return;
+      // Noise
+      const bufferSize = audioCtx.sampleRate * 0.1;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 1000;
+      
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.3, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      noise.start(time);
+      noise.stop(time + 0.1);
+    }
+
+    function playNoteTone(lane, rating) {
+      if (!audioCtx) return;
+      const freqs = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = rating === 'PERFECT' ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freqs[lane], audioCtx.currentTime);
+      
+      const vol = rating === 'PERFECT' ? 0.35 : 0.2;
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    }
+
+    function playMissSound() {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    // Canvas Setup
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+
+    function resizeCanvas() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Game Constants & State
+    const LANES = 4;
+    const LANE_COLORS = ['#00f3ff', '#ff0055', '#ffe600', '#00ff66'];
+    const LANE_KEYS = ['D', 'F', 'J', 'K'];
+    const TRAVEL_TIME = 1.2; // Seconds for note to travel from top to target
+    
+    let state = 'MENU'; // MENU, PLAYING, GAMEOVER
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('chroma_pulse_hs') || '0');
+    let combo = 0;
+    let maxCombo = 0;
+    let health = 100;
+    let notes = [];
+    let particles = [];
+    let popups = [];
+    let laneFlashes = [0, 0, 0, 0];
+
+    // Rhythm Engine Controls
+    let bpm = 120;
+    let beatInterval = 60 / bpm;
+    let nextBeatTime = 0;
+    let currentBeat = 0;
+
+    document.getElementById('start-highscore').innerText = highScore;
+
+    // Game Patterns Generator
+    function scheduleBeat(beatNum, time) {
+      // Audio beat track
+      if (beatNum % 2 === 0) playKick(time);
+      if (beatNum % 4 === 2) playSnare(time);
+
+      // Note Spawning Patterns
+      const patternType = Math.floor(beatNum / 16) % 4;
+      let spawnLanes = [];
+
+      if (patternType === 0) {
+        // Quarter notes single
+        spawnLanes.push(beatNum % 4);
+      } else if (patternType === 1) {
+        // Alternating pairs
+        spawnLanes.push((beatNum * 2) % 4);
+      } else if (patternType === 2) {
+        // Offbeat / Double notes
+        spawnLanes.push(beatNum % 4);
+        if (beatNum % 8 === 0) spawnLanes.push((beatNum + 2) % 4);
+      } else {
+        // Pseudo-random fast beats
+        spawnLanes.push(Math.floor(Math.sin(beatNum) * 2 + 2) % 4);
+      }
+
+      spawnLanes.forEach(lane => {
+        notes.push({
+          lane: lane,
+          hitTime: time + TRAVEL_TIME,
+          hit: false,
+          missed: false
+        });
+      });
+    }
+
+    // Input Handling
+    function triggerLane(laneIndex) {
+      if (state !== 'PLAYING' || !audioCtx) return;
+      
+      laneFlashes[laneIndex] = 1.0;
+      const now = audioCtx.currentTime;
+      
+      // Find closest unhit note in lane
+      let targetNote = null;
+      let minDiff = Infinity;
+
+      for (let note of notes) {
+        if (note.lane === laneIndex && !note.hit && !note.missed) {
+          let diff = Math.abs(now - note.hitTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            targetNote = note;
+          }
+        }
+      }
+
+      if (targetNote && minDiff < 0.18) {
+        targetNote.hit = true;
+        let rating = 'GOOD';
+        let pts = 50;
+        let hpGain = 2;
+
+        if (minDiff < 0.07) {
+          rating = 'PERFECT';
+          pts = 100;
+          hpGain = 5;
+        }
+
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+        let mult = Math.min(Math.floor(combo / 10) + 1, 4);
+        score += pts * mult;
+        health = Math.min(100, health + hpGain);
+
+        playNoteTone(laneIndex, rating);
+        createParticles(laneIndex, LANE_COLORS[laneIndex]);
+        addPopup(rating, laneIndex);
+
+      } else {
+        // Miss / Off-beat tap
+        combo = 0;
+        health -= 5;
+        playMissSound();
+        addPopup('MISS', laneIndex);
+      }
+
+      checkGameOver();
+    }
+
+    // Keyboard Input
+    const keyMap = {
+      'd': 0, 'f': 1, 'j': 2, 'k': 3,
+      '1': 0, '2': 1, '3': 2, '4': 3,
+      'ArrowLeft': 0, 'ArrowDown': 1, 'ArrowUp': 2, 'ArrowRight': 3
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const lane = keyMap[e.key.toLowerCase()] ?? keyMap[e.key];
+      if (lane !== undefined) {
+        triggerLane(lane);
+      }
+    });
+
+    // Touch / Mouse Input
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      initAudio();
+      const rect = canvas.getBoundingClientRect();
+      const laneWidth = rect.width / LANES;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        let touchX = e.changedTouches[i].clientX - rect.left;
+        let lane = Math.floor(touchX / laneWidth);
+        if (lane >= 0 && lane < LANES) triggerLane(lane);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (state !== 'PLAYING') return;
+      const rect = canvas.getBoundingClientRect();
+      const lane = Math.floor((e.clientX - rect.left) / (rect.width / LANES));
+      if (lane >= 0 && lane < LANES) triggerLane(lane);
+    });
+
+    // Visual Effects Helpers
+    function createParticles(lane, color) {
+      const laneWidth = canvas.width / LANES;
+      const x = laneWidth * lane + laneWidth / 2;
+      const y = canvas.height * 0.82;
+
+      for (let i = 0; i < 16; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = Math.random() * 6 + 2;
+        particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          color: color
+        });
+      }
+    }
+
+    function addPopup(text, lane) {
+      const laneWidth
