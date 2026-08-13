@@ -1,5 +1,11 @@
 [
   {
+    "title": "Ember Crypt",
+    "file": "games/2026-08-13-ember-crypt.html",
+    "date": "2026-08-13",
+    "theme": "a simple roguelike with one room and one enemy type"
+  },
+  {
     "title": "Chroma Pulse - NexCore Games",
     "file": "games/2026-08-12-chroma-pulse-nexcore-games.html",
     "date": "2026-08-12",
